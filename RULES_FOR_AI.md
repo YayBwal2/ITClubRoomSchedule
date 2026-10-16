@@ -5,7 +5,7 @@ Since you will be using AI tools (ChatGPT, Claude, Cursor, v0, etc.) to help wri
 
 ---
 
-## 📌 Golden Rule: Copy-Paste this into your AI Prompt
+##  Golden Rule: Copy-Paste this into your AI Prompt
 Whenever you ask an AI to write a component or page, start your prompt with:
 
 > *"We are building CFSS with Next.js 15 (App Router), TypeScript, Tailwind CSS, Lucide React, and Supabase. Follow these project rules strictly:"*
