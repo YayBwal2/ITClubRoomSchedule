@@ -4,15 +4,14 @@ import React, { useState } from "react";
 import { Booking } from "@/types/database";
 import { Check, X, ShieldAlert } from "lucide-react";
 
-interface PendingApprovalsTableProps {
+interface AdminTableProps {
   initialBookings?: Booking[];
 }
 
-export function PendingApprovalsTable({ initialBookings = [] }: PendingApprovalsTableProps) {
+export default function AdminTable({ initialBookings = [] }: AdminTableProps) {
   const [bookings, setBookings] = useState<Booking[]>(initialBookings);
 
   const handleAction = async (id: string, action: "approve" | "reject") => {
-    // Person 7: Hook up approve / reject actions here
     console.log(`Action: ${action} for booking ${id}`);
   };
 

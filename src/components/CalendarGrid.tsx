@@ -1,22 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Room, Booking } from "@/types/database";
 import { Clock, Filter, CalendarDays } from "lucide-react";
 
-interface WeeklyGridProps {
+interface CalendarGridProps {
   initialRooms?: Room[];
   initialBookings?: Booking[];
 }
 
-export function WeeklyGrid({ initialRooms = [], initialBookings = [] }: WeeklyGridProps) {
+export default function CalendarGrid({ initialRooms = [], initialBookings = [] }: CalendarGridProps) {
   const [selectedDate, setSelectedDate] = useState<string>("");
 
-  React.useEffect(() => {
+  useEffect(() => {
     setSelectedDate(new Date().toISOString().split("T")[0]);
   }, []);
 
-  // Standard campus time slots: 8:00 AM to 6:00 PM (10 hours)
   const timeSlots = [
     "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
     "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM"
@@ -24,7 +23,6 @@ export function WeeklyGrid({ initialRooms = [], initialBookings = [] }: WeeklyGr
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      {/* Calendar Header Controls */}
       <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 bg-slate-50/50">
         <div className="flex items-center gap-3">
           <CalendarDays className="w-5 h-5 text-indigo-600" />
@@ -44,7 +42,6 @@ export function WeeklyGrid({ initialRooms = [], initialBookings = [] }: WeeklyGr
         </div>
       </div>
 
-      {/* Grid Timeline */}
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[800px]">
           <thead>
@@ -65,7 +62,7 @@ export function WeeklyGrid({ initialRooms = [], initialBookings = [] }: WeeklyGr
                 <td colSpan={timeSlots.length + 1} className="py-12 text-center text-slate-400">
                   <Clock className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                   <p>No rooms loaded or database connection pending.</p>
-                  <p className="text-xs text-slate-400 mt-1">Person 5: Connect Supabase query here to display dynamic rooms and slots.</p>
+                  <p className="text-xs text-slate-400 mt-1">Connect Supabase to display real rooms and time slots.</p>
                 </td>
               </tr>
             ) : (

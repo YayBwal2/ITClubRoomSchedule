@@ -1,16 +1,34 @@
 "use client";
 
 import React, { useState } from "react";
-import { Booking } from "@/types/database";
-import { Badge } from "@/components/ui/badge";
+import { Booking, BookingStatus } from "@/types/database";
 import { Calendar, Clock, MapPin, Plus } from "lucide-react";
-import { BookingFormModal } from "./booking-form-modal";
+import BookingFormModal from "./BookingFormModal";
+
+function StatusBadge({ status }: { status: BookingStatus }) {
+  const styles: Record<BookingStatus, string> = {
+    pending: "bg-amber-50 text-amber-700 border-amber-200",
+    approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    rejected: "bg-rose-50 text-rose-700 border-rose-200",
+    cancelled: "bg-slate-50 text-slate-600 border-slate-200",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border capitalize ${
+        styles[status] || "bg-slate-100 text-slate-800"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
 
 interface BookingListProps {
   initialBookings?: Booking[];
 }
 
-export function BookingList({ initialBookings = [] }: BookingListProps) {
+export default function BookingList({ initialBookings = [] }: BookingListProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -39,7 +57,7 @@ export function BookingList({ initialBookings = [] }: BookingListProps) {
             <div key={b.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
               <div className="flex justify-between items-start">
                 <h4 className="font-semibold text-slate-900">{b.title}</h4>
-                <Badge status={b.status} />
+                <StatusBadge status={b.status} />
               </div>
               <div className="text-xs text-slate-500 space-y-1">
                 <div className="flex items-center gap-1.5">

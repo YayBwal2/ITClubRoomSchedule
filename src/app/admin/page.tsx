@@ -1,4 +1,4 @@
-import { PendingApprovalsTable } from "@/components/admin/pending-approvals-table";
+import AdminTable from "@/components/AdminTable";
 
 export default function AdminPage() {
   return (
@@ -10,7 +10,7 @@ export default function AdminPage() {
         </p>
       </div>
 
-      <PendingApprovalsTable />
+      <AdminTable />
     </div>
   );
 }

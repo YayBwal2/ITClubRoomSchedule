@@ -7,13 +7,12 @@ interface BookingFormModalProps {
   onClose: () => void;
 }
 
-export function BookingFormModal({ onClose }: BookingFormModalProps) {
+export default function BookingFormModal({ onClose }: BookingFormModalProps) {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    // Person 6: Hook up to Supabase or Server Action here
     setTimeout(() => {
       setLoading(false);
       onClose();

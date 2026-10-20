@@ -1,4 +1,4 @@
-import { BookingList } from "@/components/bookings/booking-list";
+import BookingList from "@/components/BookingList";
 
 export default function BookingsPage() {
   return (
