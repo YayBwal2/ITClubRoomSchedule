@@ -1,3 +1,5 @@
+//apprive or reject from admin
+
 import AdminTable from "@/components/AdminTable";
 
 export default function AdminPage() {

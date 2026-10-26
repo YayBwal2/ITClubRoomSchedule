@@ -7,8 +7,12 @@ import { Calendar, BookmarkCheck, Shield, Building2 } from "lucide-react";
 export default function Navbar() {
   const pathname = usePathname();
 
+  if (pathname === "/login") {
+    return null;
+  }
+
   const links = [
-    { href: "/", label: "Schedule Calendar", icon: Calendar },
+    { href: "/schedule", label: "Schedule Calendar", icon: Calendar },
     { href: "/bookings", label: "My Bookings", icon: BookmarkCheck },
     { href: "/admin", label: "Admin Portal", icon: Shield },
   ];
@@ -17,7 +21,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
         {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/schedule" className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold shadow-sm">
             <Building2 className="w-5 h-5" />
           </div>
