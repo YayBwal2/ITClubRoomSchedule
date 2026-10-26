@@ -16,18 +16,23 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-[#F5F5F7] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            {/* Background Graphic Wave Pattern */}
+            <div
+                className="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
+                style={{ backgroundImage: "url('/login-bg.jpg')" }}
+            />
 
-            {/* Main Login Card */}
-            <div className="w-full max-w-[460px] bg-[#E2E2E2] rounded-[32px] sm:rounded-[36px] px-8 py-9 sm:px-11 sm:py-11 shadow-[0_20px_45px_rgba(0,0,0,0.12)] border border-[#D6D6D6] my-auto">
+            {/* Frosted Glass Login Card */}
+            <div className="w-full max-w-[480px] bg-white/45 backdrop-blur-2xl rounded-[36px] sm:rounded-[44px] px-8 py-9 sm:px-12 sm:py-11 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] border border-white/60 my-auto transition-all">
                 {/* Strategy First Logo */}
                 <div className="flex flex-col items-center justify-center mb-6">
-                    <div className="relative w-35 h-auto flex items-center justify-center">
+                    <div className="relative w-36 sm:w-40 h-auto flex items-center justify-center">
                         <Image
                             src="/s1st-portrait.png"
                             alt="Strategy First International College"
-                            width={200}
-                            height={208}
+                            width={180}
+                            height={188}
                             priority
                             className="object-contain select-none"
                         />
@@ -37,7 +42,7 @@ export default function LoginPage() {
                 {/* Login Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Username Input Field */}
-                    <div className="relative flex items-center bg-white rounded-2xl h-14 px-4 shadow-[0_2px_6px_rgba(0,0,0,0.06)] focus-within:ring-2 focus-within:ring-red-500/50 transition-all">
+                    <div className="relative flex items-center bg-white rounded-2xl h-14 px-4 shadow-[0_2px_8px_rgba(0,0,0,0.08)] focus-within:ring-2 focus-within:ring-red-500/50 transition-all">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 640 640"
@@ -55,12 +60,12 @@ export default function LoginPage() {
                             placeholder="Username"
                             required
                             autoComplete="username"
-                            className="w-full bg-transparent outline-none text-black font-bold placeholder:text-black placeholder:font-bold text-base sm:text-m"
+                            className="w-full bg-transparent outline-none text-black font-bold placeholder:text-black placeholder:font-bold text-base sm:text-lg"
                         />
                     </div>
 
                     {/* Password Input Field */}
-                    <div className="relative flex items-center bg-white rounded-2xl h-14 px-4 shadow-[0_2px_6px_rgba(0,0,0,0.06)] focus-within:ring-2 focus-within:ring-red-500/50 transition-all">
+                    <div className="relative flex items-center bg-white rounded-2xl h-14 px-4 shadow-[0_2px_8px_rgba(0,0,0,0.08)] focus-within:ring-2 focus-within:ring-red-500/50 transition-all">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 -960 960 960"
@@ -78,7 +83,7 @@ export default function LoginPage() {
                             placeholder="••••••"
                             required
                             autoComplete="current-password"
-                            className="w-full bg-transparent outline-none text-black font-bold placeholder:text-black placeholder:font-bold text-base sm:text-m tracking-wider"
+                            className="w-full bg-transparent outline-none text-black font-bold placeholder:text-black placeholder:font-bold text-base sm:text-lg tracking-wider"
                         />
                         <button
                             type="button"
@@ -106,10 +111,10 @@ export default function LoginPage() {
                     </div>
 
                     {/* Submit Button */}
-                    <div className="pt-2">
+                    <div className="pt-2 flex justify-center">
                         <button
                             type="submit"
-                            className="w-full h-13 sm:h-14 bg-[#DE0808] hover:bg-[#C20707] active:scale-[0.98] text-white font-bold text-xl sm:text-2xl rounded-2xl shadow-[0_4px_14px_rgba(222,8,8,0.35)] transition-all flex items-center justify-center cursor-pointer tracking-wide"
+                            className="w-3/4 max-w-[320px] h-12 sm:h-13 bg-white/70 hover:bg-white active:scale-[0.98] text-[#DE0808] font-bold text-xl sm:text-2xl rounded-2xl shadow-[0_4px_14px_rgba(0,0,0,0.08)] backdrop-blur-md border border-white/80 transition-all flex items-center justify-center cursor-pointer tracking-wide"
                         >
                             Login
                         </button>
