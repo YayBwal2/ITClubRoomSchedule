@@ -2,17 +2,35 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { UserRole } from "@/types/database";
 
 export default function LoginPage() {
+    const router = useRouter();
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
 
+    const performLogin = (role: UserRole, targetRoute: string, userFullName: string) => {
+        localStorage.setItem("cfss_current_role", role);
+        localStorage.setItem("cfss_user_name", userFullName);
+        router.push(targetRoute);
+    };
+
     const handleSubmit = (e: React.SyntheticEvent) => {
         e.preventDefault();
-        // Frontend only - action will be implemented later
-        console.log("Login submitted:", { username, password });
+        const cleanUser = username.trim().toLowerCase();
+
+        // Direct to respective portal based on user credentials
+        if (cleanUser.includes("admin")) {
+            performLogin("admin", "/admin", "School Operations Admin");
+        } else if (cleanUser.includes("sse")) {
+            performLogin("sse", "/", "Student Services Executive");
+        } else {
+            // Coordinator default
+            performLogin("coordinator", "/bookings", cleanUser || "Club Coordinator");
+        }
     };
 
     return (
@@ -24,7 +42,7 @@ export default function LoginPage() {
             />
 
             {/* Frosted Glass Login Card */}
-            <div className="w-full max-w-[480px] bg-white/45 backdrop-blur-2xl rounded-[36px] sm:rounded-[44px] px-8 py-9 sm:px-12 sm:py-11 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] border border-white/60 my-auto transition-all">
+            <div className="w-full max-w-[950px] bg-white/45 backdrop-blur-2xl rounded-[36px] sm:rounded-[44px] px-8 py-9 sm:px-12 sm:py-11 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] border border-white/60 my-auto transition-all">
                 {/* Strategy First Logo */}
                 <div className="flex flex-col items-center justify-center mb-6">
                     <div className="relative w-36 sm:w-40 h-auto flex items-center justify-center">
@@ -57,7 +75,7 @@ export default function LoginPage() {
                             id="username"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Username"
+                            placeholder="Username / Email"
                             required
                             autoComplete="username"
                             className="w-full bg-transparent outline-none text-black font-bold placeholder:text-black placeholder:font-bold text-base sm:text-lg"
@@ -88,7 +106,7 @@ export default function LoginPage() {
                         <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="p-1 rounded-full text-gray-400 hover:text-black transition-colors shrink-0"
+                            className="p-1 rounded-full text-gray-400 hover:text-black transition-colors shrink-0 cursor-pointer"
                             title={showPassword ? "Hide password" : "Show password"}
                         >
                             {showPassword ? (
@@ -103,8 +121,8 @@ export default function LoginPage() {
                     <div className="flex justify-end pt-0.5">
                         <button
                             type="button"
-                            onClick={() => alert("Forgot password functionality will be connected soon.")}
-                            className="text-xs sm:text-sm font-bold text-black hover:text-[#DE0808] transition-colors"
+                            onClick={() => alert("Please contact Strategy First College IT Support to reset your password.")}
+                            className="text-xs sm:text-sm font-bold text-black hover:text-[#DE0808] transition-colors cursor-pointer"
                         >
                             Forgot Password?
                         </button>
