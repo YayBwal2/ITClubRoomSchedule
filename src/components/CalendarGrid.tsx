@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { CAMPUSES_DATA, UPCOMING_SCHEDULE_DATA } from "@/lib/constants";
 import { CalendarDays, Clock, MapPin, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
@@ -8,6 +8,14 @@ import Link from "next/link";
 export default function CalendarGrid() {
   const [selectedCampus, setSelectedCampus] = useState<string>("U Wisara");
   const [selectedDate, setSelectedDate] = useState<string>("2026-10-29");
+  const [currentRole, setCurrentRole] = useState<string>("coordinator");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("cfss_current_role");
+    if (saved) {
+      setCurrentRole(saved);
+    }
+  }, []);
 
   // Active campus rooms
   const currentCampusConfig = CAMPUSES_DATA.find((c) => c.name === selectedCampus) || CAMPUSES_DATA[0];
@@ -42,22 +50,37 @@ export default function CalendarGrid() {
       <div className="p-5 sm:p-6 border-b border-slate-100 bg-slate-50/50 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-[#DE0808] text-xs font-bold mb-1 border border-red-200">
-              <CalendarDays className="w-3.5 h-3.5" /> Real-Time Campus Timetable
+            <div
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mb-1 border ${
+                currentRole === "sse"
+                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                  : "bg-red-50 text-[#DE0808] border-red-200"
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>
+                {currentRole === "sse"
+                  ? "Student Services Executive • Campus Timetable (Read-Only)"
+                  : "Real-Time Campus Timetable"}
+              </span>
             </div>
             <h2 className="font-black text-slate-900 text-xl tracking-tight">Room Availability & Schedule</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Live status across Strategy First campuses. Check available slots or reserve a facility.
+              {currentRole === "sse"
+                ? "Live real-time view of classroom occupancy, course lectures, and scheduled club activities across campuses."
+                : "Live status across Strategy First campuses. Check available slots or reserve a facility."}
             </p>
           </div>
 
-          {/* Quick Action to Book */}
-          <Link
-            href="/bookings?openModal=true"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#DE0808] hover:bg-[#C20707] text-white text-xs font-black rounded-xl shadow-xs transition-colors self-start md:self-auto cursor-pointer"
-          >
-            <span>Reserve A Room</span>
-          </Link>
+          {/* Quick Action to Book (Restricted from SSE) */}
+          {currentRole !== "sse" && (
+            <Link
+              href="/bookings?openModal=true"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#DE0808] hover:bg-[#C20707] text-white text-xs font-black rounded-xl shadow-xs transition-colors self-start md:self-auto cursor-pointer"
+            >
+              <span>Reserve A Room</span>
+            </Link>
+          )}
         </div>
 
         {/* Campus Tabs & Date Picker Bar */}
@@ -153,14 +176,24 @@ export default function CalendarGrid() {
                               className="border-r border-slate-100 last:border-r-0 h-full flex items-center justify-center p-1.5"
                             >
                               {!hasOverlap && (
-                                <Link
-                                  href={`/bookings?openModal=true&campus=${encodeURIComponent(selectedCampus)}&room=${encodeURIComponent(room.name)}`}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50/90 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-colors cursor-pointer select-none"
-                                  title={`Book ${room.name} (${slot.label})`}
-                                >
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                  <span>Available</span>
-                                </Link>
+                                currentRole === "sse" ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50/90 rounded-lg border border-emerald-200 select-none"
+                                    title={`${room.name} (${slot.label}) is Available`}
+                                  >
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                    <span>Available</span>
+                                  </span>
+                                ) : (
+                                  <Link
+                                    href={`/bookings?openModal=true&campus=${encodeURIComponent(selectedCampus)}&room=${encodeURIComponent(room.name)}`}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50/90 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-colors cursor-pointer select-none"
+                                    title={`Book ${room.name} (${slot.label})`}
+                                  >
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                    <span>Available</span>
+                                  </Link>
+                                )
                               )}
                             </div>
                           );

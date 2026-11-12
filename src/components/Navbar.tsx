@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
-import { Menu, X, Calendar, BookOpen, ShieldCheck, User } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Menu, X, Calendar, BookOpen, ShieldCheck, User, LogOut } from "lucide-react";
 import { UserRole } from "@/types/database";
 
 export interface NavItem {
@@ -14,10 +14,18 @@ export interface NavItem {
 }
 
 export default function Navbar() {
+  const router = useRouter();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentRole, setCurrentRole] = useState<UserRole>("coordinator");
   const [avatarPreview, setAvatarPreview] = useState<string>("");
+
+  const handleLogout = () => {
+    localStorage.removeItem("cfss_current_role");
+    localStorage.removeItem("cfss_user_avatar");
+    localStorage.removeItem("cfss_user_name");
+    router.push("/login");
+  };
 
   // Sync role and avatar from localStorage
   useEffect(() => {
@@ -153,6 +161,17 @@ export default function Navbar() {
               <div className="text-[9px] font-bold text-slate-400 leading-tight">Profile</div>
             </div>
           </Link>
+
+          {/* Quick Logout Button */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:text-[#DE0808] hover:bg-red-50 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+            title="Log Out"
+          >
+            <LogOut className="w-3.5 h-3.5 text-slate-500 hover:text-[#DE0808]" />
+            <span className="hidden xl:inline">Logout</span>
+          </button>
         </div>
 
         {/* Mobile Hamburger Button & Avatar */}
@@ -221,6 +240,17 @@ export default function Navbar() {
                 + New Booking
               </Link>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                handleLogout();
+              }}
+              className="w-full py-2.5 px-4 text-center text-xs font-black text-white bg-slate-800 hover:bg-black rounded-xl shadow-xs block cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log Out</span>
+            </button>
           </div>
         </div>
       )}

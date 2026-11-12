@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ActivityProposal, ProposalStatus } from "@/types/database";
 import {
   Check,
@@ -116,6 +117,7 @@ const INITIAL_ADMIN_PROPOSALS: ActivityProposal[] = [
 ];
 
 export default function AdminTable() {
+  const router = useRouter();
   const [proposals, setProposals] = useState<ActivityProposal[]>(INITIAL_ADMIN_PROPOSALS);
   const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
@@ -126,10 +128,12 @@ export default function AdminTable() {
 
   useEffect(() => {
     const saved = localStorage.getItem("cfss_current_role");
-    if (saved) {
+    if (saved === "sse") {
+      router.replace("/schedule");
+    } else if (saved) {
       setCurrentRole(saved);
     }
-  }, []);
+  }, [router]);
 
   const isAdmin = currentRole === "admin";
 

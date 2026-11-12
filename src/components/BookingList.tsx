@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ActivityProposal, ProposalStatus } from "@/types/database";
 import {
   Calendar,
@@ -98,10 +99,19 @@ const INITIAL_PROPOSALS: ActivityProposal[] = [
 ];
 
 export default function BookingList() {
+  const router = useRouter();
   const [proposals, setProposals] = useState<ActivityProposal[]>(INITIAL_PROPOSALS);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | ProposalStatus>("all");
   const [inspectProposal, setInspectProposal] = useState<ActivityProposal | null>(null);
+
+  // Restrict SSE from accessing bookings: redirect to /schedule immediately
+  useEffect(() => {
+    const role = localStorage.getItem("cfss_current_role");
+    if (role === "sse") {
+      router.replace("/schedule");
+    }
+  }, [router]);
 
   // Listen for openBookingModal custom event (e.g. from Navbar + New Booking button)
   // and handle URL search parameters like /bookings?openModal=true
