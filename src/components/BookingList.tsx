@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ActivityProposal, ProposalStatus } from "@/types/database";
 import {
   Calendar,
@@ -81,8 +81,8 @@ const INITIAL_PROPOSALS: ActivityProposal[] = [
     description: "Demo of Oculus headsets and interactive simulations.",
     expected_attendees: 20,
     campus: "Panchan Tower",
-    room_id: "pt-vr",
-    room_name: "VR Room",
+    room_id: "pt-r7",
+    room_name: "Room 7",
     activity_date: "2026-10-24",
     start_time: "10:00 AM",
     end_time: "01:00 PM",
@@ -102,6 +102,23 @@ export default function BookingList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | ProposalStatus>("all");
   const [inspectProposal, setInspectProposal] = useState<ActivityProposal | null>(null);
+
+  // Listen for openBookingModal custom event (e.g. from Navbar + New Booking button)
+  // and handle URL search parameters like /bookings?openModal=true
+  useEffect(() => {
+    const handleOpen = () => setIsModalOpen(true);
+    window.addEventListener("openBookingModal", handleOpen);
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("openModal") === "true" || params.get("new") === "true") {
+        setIsModalOpen(true);
+        window.history.replaceState({}, "", "/bookings");
+      }
+    }
+
+    return () => window.removeEventListener("openBookingModal", handleOpen);
+  }, []);
 
   const filteredProposals = proposals.filter((p) => {
     if (activeFilter === "all") return true;

@@ -26,7 +26,7 @@ export default function LoginPage() {
         if (cleanUser.includes("admin")) {
             performLogin("admin", "/admin", "School Operations Admin");
         } else if (cleanUser.includes("sse")) {
-            performLogin("sse", "/", "Student Services Executive");
+            performLogin("sse", "/schedule", "Student Services Executive");
         } else {
             // Coordinator default
             performLogin("coordinator", "/bookings", cleanUser || "Club Coordinator");

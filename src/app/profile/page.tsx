@@ -139,6 +139,7 @@ export default function ProfilePage() {
   const handleLogout = () => {
     localStorage.removeItem("cfss_current_role");
     localStorage.removeItem("cfss_user_avatar");
+    localStorage.removeItem("cfss_user_name");
     router.push("/login");
   };
 

@@ -2,7 +2,7 @@ import { ActivityProposal, ClassSchedule, Room } from "@/types/database";
 
 // Campus Configuration & Rooms matching user requirements:
 // - U Wisara (Room 1-6)
-// - Panchan Tower (Theater Room, Activity Room, Room 3 - 7, VR Room)
+// - Panchan Tower (Theater Room, Activity Room, Room 3 - 7)
 // - Pyay Campus (Pyay Theater Room, Room 1 - 3)
 // - Time City Campus (Coming Soon)
 export interface CampusConfig {
@@ -41,7 +41,6 @@ export const CAMPUSES_DATA: CampusConfig[] = [
       { id: "pt-r5", name: "Room 5", campus: "Panchan Tower", building: "Tower B", floor: 4, capacity: 40, has_ac: true, has_projector: true, has_whiteboard: true, status: "active" },
       { id: "pt-r6", name: "Room 6", campus: "Panchan Tower", building: "Tower B", floor: 4, capacity: 45, has_ac: true, has_projector: true, has_whiteboard: true, status: "active" },
       { id: "pt-r7", name: "Room 7", campus: "Panchan Tower", building: "Tower B", floor: 5, capacity: 50, has_ac: true, has_projector: true, has_whiteboard: true, status: "active" },
-      { id: "pt-vr", name: "VR Room", campus: "Panchan Tower", building: "Tech Wing", floor: 5, capacity: 25, has_ac: true, has_projector: true, has_whiteboard: true, status: "active" },
     ],
   },
   {

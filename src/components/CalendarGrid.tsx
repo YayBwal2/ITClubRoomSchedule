@@ -13,7 +13,7 @@ export default function CalendarGrid() {
   const currentCampusConfig = CAMPUSES_DATA.find((c) => c.name === selectedCampus) || CAMPUSES_DATA[0];
   const rooms = currentCampusConfig.rooms;
 
-  // Timeline hours across standard school day
+  // Timeline hours across standard school day (09:00 AM - 06:00 PM)
   const timeSlots = [
     { label: "09:00 - 10:30", start: 540, end: 630 },
     { label: "10:30 - 12:00", start: 630, end: 720 },
@@ -23,16 +23,16 @@ export default function CalendarGrid() {
     { label: "04:30 - 06:00", start: 990, end: 1080 },
   ];
 
-  // Helper to check room occupancy for a specific time slot
-  const getSessionForSlot = (roomName: string, slotStart: number, slotEnd: number) => {
+  // Helper to get ALL sessions for a room on the active campus
+  const getSessionsForRoom = (roomName: string) => {
     const normRoom = roomName.toLowerCase().replace(/\s+/g, "");
     const normCampus = selectedCampus.toLowerCase().trim();
 
-    return UPCOMING_SCHEDULE_DATA.find((item) => {
-      const matchCampus = item.campus.toLowerCase().includes(normCampus) || normCampus.includes(item.campus.toLowerCase());
+    return UPCOMING_SCHEDULE_DATA.filter((item) => {
+      const matchCampus =
+        item.campus.toLowerCase().includes(normCampus) || normCampus.includes(item.campus.toLowerCase());
       const matchRoom = item.room.toLowerCase().replace(/\s+/g, "") === normRoom;
-      const overlap = slotStart < item.endMinutes && slotEnd > item.startMinutes;
-      return matchCampus && matchRoom && overlap;
+      return matchCampus && matchRoom;
     });
   };
 
@@ -53,7 +53,7 @@ export default function CalendarGrid() {
 
           {/* Quick Action to Book */}
           <Link
-            href="/bookings"
+            href="/bookings?openModal=true"
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#DE0808] hover:bg-[#C20707] text-white text-xs font-black rounded-xl shadow-xs transition-colors self-start md:self-auto cursor-pointer"
           >
             <span>Reserve A Room</span>
@@ -104,14 +104,14 @@ export default function CalendarGrid() {
 
       {/* Timetable Grid Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[850px]">
+        <table className="w-full text-left border-collapse min-w-[880px] table-fixed">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-100/70 text-xs font-black text-slate-600 uppercase tracking-wider">
-              <th className="py-3 px-4 w-44 sticky left-0 bg-slate-100 z-10 border-r border-slate-200">
+              <th className="py-3 px-4 w-40 sm:w-44 sticky left-0 bg-slate-100 z-20 border-r border-slate-200">
                 Classroom
               </th>
               {timeSlots.map((slot) => (
-                <th key={slot.label} className="py-3 px-2 text-center border-r border-slate-200 last:border-r-0 font-bold">
+                <th key={slot.label} className="py-3 px-2 text-center border-r border-slate-200 last:border-r-0 font-bold text-[11px] sm:text-xs">
                   {slot.label}
                 </th>
               ))}
@@ -125,42 +125,107 @@ export default function CalendarGrid() {
                 </td>
               </tr>
             ) : (
-              rooms.map((room) => (
-                <tr key={room.id} className="hover:bg-slate-50/60 transition-colors">
-                  {/* Room Name Column (No seat count!) */}
-                  <td className="py-3.5 px-4 sticky left-0 bg-white font-black text-slate-900 border-r border-slate-200 shadow-2xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-[#DE0808]" />
-                      <span>{room.name}</span>
-                    </div>
-                  </td>
+              rooms.map((room) => {
+                const roomSessions = getSessionsForRoom(room.name);
 
-                  {/* Time Slots */}
-                  {timeSlots.map((slot) => {
-                    const session = getSessionForSlot(room.name, slot.start, slot.end);
+                return (
+                  <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
+                    {/* Room Name Column (No seat count!) */}
+                    <td className="py-3.5 px-4 sticky left-0 bg-white font-black text-slate-900 border-r border-slate-200 shadow-2xs z-20 align-middle">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#DE0808]" />
+                        <span>{room.name}</span>
+                      </div>
+                    </td>
 
-                    return (
-                      <td key={slot.label} className="p-2 border-r border-slate-100 last:border-r-0 text-center align-middle">
-                        {session ? (
-                          <div className={`p-2 rounded-xl text-[11px] font-bold border transition-all ${
-                            session.type === "Club Activity"
-                              ? "bg-amber-50 text-amber-900 border-amber-200"
-                              : "bg-red-50 text-red-900 border-red-200"
-                          }`}>
-                            <div className="truncate font-black">{session.category}</div>
-                            <div className="text-[10px] opacity-75 mt-0.5">{session.time}</div>
+                    {/* Timeline Track spanning all time slots */}
+                    <td colSpan={timeSlots.length} className="p-0 relative h-16 sm:h-20 align-middle">
+                      {/* Background Columns & Available Slot Indicators */}
+                      <div className="grid grid-cols-6 h-full absolute inset-0">
+                        {timeSlots.map((slot) => {
+                          const hasOverlap = roomSessions.some(
+                            (s) => slot.start < s.endMinutes && slot.end > s.startMinutes
+                          );
+
+                          return (
+                            <div
+                              key={slot.label}
+                              className="border-r border-slate-100 last:border-r-0 h-full flex items-center justify-center p-1.5"
+                            >
+                              {!hasOverlap && (
+                                <Link
+                                  href={`/bookings?openModal=true&campus=${encodeURIComponent(selectedCampus)}&room=${encodeURIComponent(room.name)}`}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50/90 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-colors cursor-pointer select-none"
+                                  title={`Book ${room.name} (${slot.label})`}
+                                >
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  <span>Available</span>
+                                </Link>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Continuous Session Bars (Gantt / Continuous timeline pill) */}
+                      {roomSessions.map((session) => {
+                        const DAY_START = 540; // 09:00 AM
+                        const DAY_END = 1080;  // 06:00 PM
+                        const TOTAL_MINUTES = DAY_END - DAY_START; // 540 min
+
+                        const leftPct = Math.max(0, ((session.startMinutes - DAY_START) / TOTAL_MINUTES) * 100);
+                        const rightPct = Math.min(100, ((session.endMinutes - DAY_START) / TOTAL_MINUTES) * 100);
+                        const widthPct = Math.max(4, rightPct - leftPct);
+                        const isClub = session.type === "Club Activity";
+
+                        return (
+                          <div
+                            key={session.id}
+                            style={{
+                              left: `calc(${leftPct}% + 4px)`,
+                              width: `calc(${widthPct}% - 8px)`,
+                            }}
+                            className={`absolute top-2 bottom-2 rounded-xl px-3 py-1.5 flex flex-col justify-center border shadow-xs transition-all hover:shadow-md hover:z-20 select-none ${
+                              isClub
+                                ? "bg-amber-50 text-amber-950 border-amber-300 hover:border-amber-400"
+                                : "bg-red-50 text-red-950 border-red-200/90 hover:border-red-300"
+                            }`}
+                            title={`${session.category} (${session.type})\nTime: ${session.time}\nRoom: ${room.name} (${selectedCampus})`}
+                          >
+                            <div className="flex items-center justify-between gap-1 overflow-hidden">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span
+                                  className={`w-2 h-2 rounded-full shrink-0 ${
+                                    isClub ? "bg-amber-500" : "bg-[#DE0808]"
+                                  }`}
+                                />
+                                <span className="font-black text-xs truncate">
+                                  {session.category}
+                                </span>
+                              </div>
+                              {widthPct > 26 && (
+                                <span
+                                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md border shrink-0 ${
+                                    isClub
+                                      ? "bg-amber-100/70 border-amber-200 text-amber-900"
+                                      : "bg-red-100/70 border-red-200 text-red-900"
+                                  }`}
+                                >
+                                  {session.type}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] font-bold opacity-80 mt-0.5 truncate flex items-center gap-1">
+                              <Clock className="w-3 h-3 shrink-0 opacity-70" />
+                              <span>{session.time}</span>
+                            </div>
                           </div>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50/90 rounded-lg border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>Available</span>
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
+                        );
+                      })}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

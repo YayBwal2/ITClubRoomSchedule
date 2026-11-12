@@ -36,30 +36,55 @@ export default function Navbar() {
     return null;
   }
 
-  // Navigation Links:
-  // - Coordinator: Home, Bookings
-  // - Admin: Home, Admin Portal, Bookings
-  // - SSE: Home, Bookings
-  const navItems: NavItem[] = [
-    { label: "Home", href: "/", icon: Calendar },
-    ...(currentRole === "admin"
-      ? [{ label: "Admin Portal", href: "/admin", icon: ShieldCheck }]
-      : []),
-    { label: "Bookings", href: "/bookings", icon: BookOpen },
-  ];
+  // Home link based on logged-in role
+  const homeHref =
+    currentRole === "admin"
+      ? "/admin"
+      : currentRole === "sse"
+      ? "/schedule"
+      : "/bookings";
 
-  const isCurrentActive = (href: string) => {
-    if (href === "/") {
-      return pathname === "/" || pathname === "";
+  // Navigation Links based on logged-in portal role:
+  // - Coordinator: Bookings, Room Schedule
+  // - Admin: Admin Portal, Bookings, Room Schedule
+  // - SSE: Room Schedule
+  const navItems: NavItem[] =
+    currentRole === "admin"
+      ? [
+          { label: "Admin Portal", href: "/admin", icon: ShieldCheck },
+          { label: "Bookings", href: "/bookings", icon: BookOpen },
+          { label: "Room Schedule", href: "/schedule", icon: Calendar },
+        ]
+      : currentRole === "sse"
+      ? [
+          { label: "Room Schedule", href: "/schedule", icon: Calendar },
+        ]
+      : [
+          { label: "Bookings", href: "/bookings", icon: BookOpen },
+          { label: "Room Schedule", href: "/schedule", icon: Calendar },
+        ];
+
+  const roleDisplay =
+    currentRole === "admin"
+      ? "Admin"
+      : currentRole === "sse"
+      ? "SSE"
+      : "Coordinator";
+
+  const isCurrentActive = (href: string) => pathname === href;
+
+  const handleNewBookingClick = (e: React.MouseEvent) => {
+    if (pathname === "/bookings") {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("openBookingModal"));
     }
-    return pathname.startsWith(href);
   };
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white border-b border-gray-100 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-20 items-center justify-between">
-        {/* Left: Strategy First Horizontal Brand Logo */}
-        <Link href="/" className="flex items-center shrink-0">
+        {/* Left: Strategy First Horizontal Brand Logo (links to user's home portal) */}
+        <Link href={homeHref} className="flex items-center shrink-0">
           <Image
             src="/sfic-horizontal-logo.png"
             alt="Strategy First International College"
@@ -94,14 +119,17 @@ export default function Navbar() {
 
         {/* Right: + New Booking Button & Profile Avatar Link */}
         <div className="hidden md:flex items-center gap-3">
-          <Link
-            href="/bookings"
-            className="px-4 py-2 text-xs font-black text-white bg-[#DE0808] hover:bg-[#C20707] rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-          >
-            <span>+ New Booking</span>
-          </Link>
+          {currentRole !== "sse" && (
+            <Link
+              href="/bookings?openModal=true"
+              onClick={handleNewBookingClick}
+              className="px-4 py-2 text-xs font-black text-white bg-[#DE0808] hover:bg-[#C20707] rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>+ New Booking</span>
+            </Link>
+          )}
 
-          {/* User Profile Avatar Link (Replaced the Role Dropdown!) */}
+          {/* User Profile Avatar Link */}
           <Link
             href="/profile"
             className={`flex items-center gap-2 p-1.5 rounded-2xl border transition-all hover:bg-slate-50 ${
@@ -120,7 +148,7 @@ export default function Navbar() {
             </div>
             <div className="pr-2 text-left">
               <div className="text-[11px] font-black text-slate-900 leading-tight">
-                {currentRole === "admin" ? "Admin" : "Coordinator"}
+                {roleDisplay}
               </div>
               <div className="text-[9px] font-bold text-slate-400 leading-tight">Profile</div>
             </div>
@@ -181,13 +209,18 @@ export default function Navbar() {
             >
               My Profile & Settings
             </Link>
-            <Link
-              href="/bookings"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="w-full py-2.5 px-4 text-center text-xs font-black text-white bg-[#DE0808] hover:bg-[#C20707] rounded-xl shadow-xs block"
-            >
-              + New Booking
-            </Link>
+            {currentRole !== "sse" && (
+              <Link
+                href="/bookings?openModal=true"
+                onClick={(e) => {
+                  setIsMobileMenuOpen(false);
+                  handleNewBookingClick(e);
+                }}
+                className="w-full py-2.5 px-4 text-center text-xs font-black text-white bg-[#DE0808] hover:bg-[#C20707] rounded-xl shadow-xs block cursor-pointer"
+              >
+                + New Booking
+              </Link>
+            )}
           </div>
         </div>
       )}
