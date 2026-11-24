@@ -1,4 +1,5 @@
-import { ActivityProposal, ClassSchedule, Room } from "@/types/database";
+import { Room } from "@/types/database";
+import { parseTimeToMinutes } from "@/lib/firebase/collections";
 
 // Campus Configuration & Rooms matching user requirements:
 // - U Wisara (Room 1-6)
@@ -93,27 +94,8 @@ export const UPCOMING_SCHEDULE_DATA: UpcomingItem[] = [
 
 // Helper to convert "HH:MM AM/PM" or "HH:MM" string to minutes from midnight
 export function timeStringToMinutes(timeStr: string): number {
-  if (!timeStr) return 0;
-  const clean = timeStr.trim();
-  
-  // Format "09:00 AM" or "02:30 PM"
-  const matchAmPm = clean.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (matchAmPm) {
-    let hours = parseInt(matchAmPm[1], 10);
-    const minutes = parseInt(matchAmPm[2], 10);
-    const modifier = matchAmPm[3]?.toUpperCase();
-
-    if (modifier === "PM" && hours < 12) hours += 12;
-    if (modifier === "AM" && hours === 12) hours = 0;
-    return hours * 60 + minutes;
-  }
-
-  // Fallback 24hr "14:30"
-  const parts = clean.split(":");
-  if (parts.length >= 2) {
-    return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-  }
-  return 0;
+  const parsed = parseTimeToMinutes(timeStr);
+  return parsed >= 0 ? parsed : 0;
 }
 
 // Convert minutes to "HH:MM AM/PM" string

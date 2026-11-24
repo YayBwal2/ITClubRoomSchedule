@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -25,6 +24,11 @@ import {
   Key,
   BadgeCheck,
 } from "lucide-react";
+import { getCurrentProfile } from "@/actions/profiles";
+import {
+  changeFirebasePassword,
+  signOutAndClearSession,
+} from "@/lib/firebase/auth-client";
 import { UserRole } from "@/types/database";
 
 export default function ProfilePage() {
@@ -61,39 +65,79 @@ export default function ProfilePage() {
   // Save profile state message
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
 
-  // Load user from localStorage on mount
+  // Load user from authenticated Firestore profile (with localStorage fallback)
   useEffect(() => {
+    let cancelled = false;
     const savedRole = localStorage.getItem("cfss_current_role") as UserRole;
     const savedAvatar = localStorage.getItem("cfss_user_avatar");
-    if (savedAvatar) {
-      setAvatarPreview(savedAvatar);
-    }
 
-    if (savedRole === "admin") {
+    const applyRoleFallback = (role: UserRole) => {
+      if (role === "admin") {
+        setUser((prev) => ({
+          ...prev,
+          role: "School Operations Admin",
+          roleCode: "admin",
+          id: "ADM-001",
+          email: "admin@sfic.edu.mm",
+        }));
+      } else if (role === "sse") {
+        setUser((prev) => ({
+          ...prev,
+          role: "Student Services Executive",
+          roleCode: "sse",
+          id: "SSE-204",
+          email: "sse@sfic.edu.mm",
+        }));
+      } else {
+        setUser((prev) => ({
+          ...prev,
+          role: "Club Coordinator",
+          roleCode: "coordinator",
+          id: "A112",
+          email: "coordinator@sfic.edu.mm",
+        }));
+      }
+    };
+
+    getCurrentProfile().then((res) => {
+      if (cancelled) return;
+      if (savedAvatar) {
+        setAvatarPreview(savedAvatar);
+      }
+      if (!res.data) {
+        applyRoleFallback(savedRole || "coordinator");
+        return;
+      }
+
+      const profile = res.data;
+      const roleTitle =
+        profile.role === "admin"
+          ? "School Operations Admin"
+          : profile.role === "sse"
+          ? "Student Services Executive"
+          : "Club Coordinator";
+
       setUser((prev) => ({
         ...prev,
-        role: "School Operations Admin",
-        roleCode: "admin",
-        id: "ADM-001",
-        email: "admin@sfic.edu.mm",
+        name: profile.full_name,
+        id: profile.id.slice(0, 10),
+        role: roleTitle,
+        roleCode: profile.role,
+        email: profile.email,
+        phone: profile.phone_number || prev.phone,
+        joinedDate: profile.created_at
+          ? new Date(profile.created_at).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })
+          : prev.joinedDate,
       }));
-    } else if (savedRole === "sse") {
-      setUser((prev) => ({
-        ...prev,
-        role: "Student Services Executive",
-        roleCode: "sse",
-        id: "SSE-204",
-        email: "sse@sfic.edu.mm",
-      }));
-    } else {
-      setUser((prev) => ({
-        ...prev,
-        role: "Club Coordinator",
-        roleCode: "coordinator",
-        id: "A112",
-        email: "doraemon@gmail.com",
-      }));
-    }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Avatar upload handler (EDITABLE)
@@ -112,8 +156,8 @@ export default function ProfilePage() {
     }
   };
 
-  // Password change handler (EDITABLE)
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  // Password change handler (Firebase Auth)
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oldPassword || !newPassword || !confirmPassword) {
       setPasswordMessage({ type: "error", text: "Please fill in all password fields." });
@@ -128,18 +172,28 @@ export default function ProfilePage() {
       return;
     }
 
-    setPasswordMessage({ type: "success", text: "Password changed successfully!" });
-    setOldPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setTimeout(() => setPasswordMessage(null), 3500);
+    try {
+      await changeFirebasePassword(oldPassword, newPassword);
+      setPasswordMessage({ type: "success", text: "Password changed successfully!" });
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPasswordMessage(null), 3500);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to update password.";
+      setPasswordMessage({
+        type: "error",
+        text: msg.includes("auth/invalid-credential") || msg.includes("auth/wrong-password")
+          ? "Current password is incorrect."
+          : msg,
+      });
+    }
   };
 
   // Logout handler
-  const handleLogout = () => {
-    localStorage.removeItem("cfss_current_role");
-    localStorage.removeItem("cfss_user_avatar");
-    localStorage.removeItem("cfss_user_name");
+  const handleLogout = async () => {
+    await signOutAndClearSession();
     router.push("/login");
   };
 
@@ -174,7 +228,7 @@ export default function ProfilePage() {
               <User className="w-5 h-5 text-slate-800" />
               <div>
                 <h2 className="text-base font-black text-slate-900 leading-tight">Personal Information</h2>
-                <p className="text-[11px] text-slate-400">User's personal details</p>
+                <p className="text-[11px] text-slate-400">User&apos;s personal details</p>
               </div>
             </div>
             {/* Red Accent Horizontal Divider Line */}

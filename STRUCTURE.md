@@ -30,10 +30,12 @@ Component များကို ရှုပ်ထွေးသော Sub-folder 
 
 ### 3. ⚙️ Backend & Server Actions (Logic ပိုင်း)
 Database ထဲ Data သိမ်းခြင်း၊ ထုတ်ခြင်းများကို `src/actions/` ထဲတွင် ရေးပါသည်:
-* `src/actions/bookings.ts` — Booking တင်ခြင်း၊ Double Booking စစ်ဆေးခြင်း
-* `src/actions/rooms.ts` — အခန်းစာရင်းနှင့် အချက်အလက်များ ဆွဲထုတ်ခြင်း
+* `src/actions/bookings.ts` — Activity Proposals & Booking တင်ခြင်း၊ Double Booking စစ်ဆေးခြင်း
+* `src/actions/rooms.ts` — အခန်းစာရင်းနှင့် အချက်အလက်များ စီမံခြင်း
+* `src/actions/schedules.ts` — Class Schedules (Timetable) စီမံခြင်း
+* `src/actions/profiles.ts` — User Profile နှင့် Role စီမံခြင်း
 * `src/actions/admin.ts` — Admin မှ Approve/Reject လုပ်ဆောင်ချက်များ
-* `src/lib/supabase/` — Supabase database ချိတ်ဆက်မှုများ
+* `src/lib/firebase/` — Firebase (Firestore + Auth + Admin SDK) ချိတ်ဆက်မှုနှင့် Overlap Prevention
 
 ---
 

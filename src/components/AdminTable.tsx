@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { reviewActivityProposal } from "@/actions/admin";
+import { getActivityProposals } from "@/actions/bookings";
+import { getCurrentProfile } from "@/actions/profiles";
 import { ActivityProposal, ProposalStatus } from "@/types/database";
 import {
   Check,
@@ -13,7 +16,6 @@ import {
   Clock,
   Calendar,
   MapPin,
-  Building2,
   Users,
   Search,
   Lock,
@@ -118,7 +120,9 @@ const INITIAL_ADMIN_PROPOSALS: ActivityProposal[] = [
 
 export default function AdminTable() {
   const router = useRouter();
-  const [proposals, setProposals] = useState<ActivityProposal[]>(INITIAL_ADMIN_PROPOSALS);
+  const [proposals, setProposals] = useState<ActivityProposal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [inspectItem, setInspectItem] = useState<ActivityProposal | null>(null);
@@ -127,12 +131,39 @@ export default function AdminTable() {
   const [currentRole, setCurrentRole] = useState<string>("admin");
 
   useEffect(() => {
+    let cancelled = false;
     const saved = localStorage.getItem("cfss_current_role");
     if (saved === "sse") {
       router.replace("/schedule");
-    } else if (saved) {
-      setCurrentRole(saved);
+      return;
     }
+
+    Promise.all([getCurrentProfile(), getActivityProposals()]).then(
+      ([profileRes, proposalsRes]) => {
+        if (cancelled) return;
+
+        if (profileRes.data) {
+          if (profileRes.data.role === "sse") {
+            router.replace("/schedule");
+            return;
+          }
+          setCurrentRole(profileRes.data.role);
+        } else if (saved) {
+          setCurrentRole(saved);
+        }
+
+        if (proposalsRes.data) {
+          setProposals(proposalsRes.data);
+        } else {
+          setProposals(INITIAL_ADMIN_PROPOSALS);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const isAdmin = currentRole === "admin";
@@ -142,22 +173,39 @@ export default function AdminTable() {
   const approvedCount = proposals.filter((p) => p.status === "approved").length;
   const rejectedCount = proposals.filter((p) => p.status === "rejected").length;
 
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     if (!isAdmin) return;
+    setActionError(null);
+
+    const res = await reviewActivityProposal(id, "approved");
+    if (!res.success) {
+      setActionError(res.error || "Failed to approve proposal.");
+      return;
+    }
+
     setProposals((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: "approved" as ProposalStatus, rejection_reason: null } : p))
     );
   };
 
-  const handleRejectConfirm = () => {
+  const handleRejectConfirm = async () => {
     if (!isAdmin || !rejectItem) return;
+    setActionError(null);
+
+    const reason = rejectionReason || "Declined by School Operations Administration.";
+    const res = await reviewActivityProposal(rejectItem.id, "rejected", reason);
+    if (!res.success) {
+      setActionError(res.error || "Failed to reject proposal.");
+      return;
+    }
+
     setProposals((prev) =>
       prev.map((p) =>
         p.id === rejectItem.id
           ? {
               ...p,
               status: "rejected" as ProposalStatus,
-              rejection_reason: rejectionReason || "Declined by School Operations Administration.",
+              rejection_reason: reason,
             }
           : p
       )
@@ -277,6 +325,14 @@ export default function AdminTable() {
         </div>
       </div>
 
+      {/* Action Error Alert (e.g., room overlap conflict or unauthorized) */}
+      {actionError && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{actionError}</span>
+        </div>
+      )}
+
       {/* Main Table */}
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -292,7 +348,13 @@ export default function AdminTable() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProposals.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-400 font-bold">
+                    Loading proposals from Firestore...
+                  </td>
+                </tr>
+              ) : filteredProposals.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
                     <Shield className="w-8 h-8 mx-auto mb-2 text-slate-300" />
@@ -456,7 +518,7 @@ export default function AdminTable() {
                 <div className="pt-2 space-y-1">
                   <span className="text-slate-500 font-bold block">Special Requests</span>
                   <p className="bg-slate-50 p-2.5 rounded-xl text-slate-700 italic">
-                    "{inspectItem.additional_requests}"
+                    &ldquo;{inspectItem.additional_requests}&rdquo;
                   </p>
                 </div>
               )}
@@ -502,7 +564,7 @@ export default function AdminTable() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
             <h3 className="text-base font-black text-slate-900 mb-1">Reject Proposal</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Please state the reason for rejecting "{rejectItem.title}". The coordinator will see this message.
+              Please state the reason for rejecting &ldquo;{rejectItem.title}&rdquo;. The coordinator will see this message.
             </p>
 
             <textarea

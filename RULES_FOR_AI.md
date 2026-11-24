@@ -8,7 +8,7 @@ Since you will be using AI tools (ChatGPT, Claude, Cursor, v0, etc.) to help wri
 ##  Golden Rule: Copy-Paste this into your AI Prompt
 Whenever you ask an AI to write a component or page, start your prompt with:
 
-> *"We are building CFSS with Next.js 15 (App Router), TypeScript, Tailwind CSS, Lucide React, and Supabase. Follow these project rules strictly:"*
+> *"We are building CFSS with Next.js (App Router), TypeScript, Tailwind CSS, Lucide React, and Firebase (Firestore + Auth). Follow these project rules strictly:"*
 
 ---
 
@@ -36,8 +36,8 @@ Whenever you ask an AI to write a component or page, start your prompt with:
 
 ## 3. Data & API Rules
 * **Double Booking Check**:
-  * The database handles double-booking automatically via PostgreSQL constraints.
-  * Your UI should cleanly handle any Supabase error and display a user-friendly toast or alert: *"This room is already reserved for this time slot."*
+  * Server Actions enforce double-booking prevention atomically via Firestore transactions (`assertNoRoomOverlap` in `src/lib/firebase/overlap.ts`).
+  * Your UI should cleanly handle any Server Action error and display a user-friendly toast or alert: *"This room is already reserved for this time slot."*
 * **Date Formats**:
   * Store all dates in UTC ISO string format (`2026-10-16T14:00:00Z`).
   * Display dates locally using standard JS `toLocaleDateString()` or `toLocaleTimeString()`.

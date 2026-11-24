@@ -9,23 +9,43 @@ export type BookingStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 export type RoomStatus = "active" | "maintenance";
 
-// User Profile
-export interface Profile {
+export type ScheduleStatus = "active" | "cancelled";
+
+export type DayOfWeek =
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday"
+  | "Saturday"
+  | "Sunday";
+
+// Standard audit metadata stored across Firestore collections
+export interface AuditFields {
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+// User Profile (Firestore collection: `profiles`, doc id = Firebase Auth UID)
+export interface Profile extends AuditFields {
   id: string;
   email: string;
   full_name: string;
   role: UserRole;
   club_name?: string | null;
   phone_number?: string | null;
+  is_active?: boolean;
   created_at: string;
 }
 
-// Room Details
-export interface Room {
+// Room Details (Firestore collection: `rooms`)
+export interface Room extends AuditFields {
   id: string;
-  name: string; // e.g. "Room 101", "Computer Lab A"
-  campus: string; // e.g. "Main Campus", "City Campus"
-  building: string; // e.g. "Building A", "Annex"
+  name: string; // e.g. "Room 1", "Theater Room"
+  campus: string; // e.g. "U Wisara", "Panchan Tower", "Pyay Campus"
+  building: string; // e.g. "Main Wing", "Tower A"
   floor: number;
   capacity: number;
   has_projector: boolean;
@@ -33,11 +53,10 @@ export interface Room {
   has_whiteboard: boolean;
   status: RoomStatus;
   notes?: string | null;
-  created_at?: string;
 }
 
-// Club Activity Proposal submitted by Club Coordinator based on Event Request Form
-export interface ActivityProposal {
+// Club Activity Proposal submitted by Club Coordinator (Firestore collection: `activity_proposals`)
+export interface ActivityProposal extends AuditFields {
   id: string;
   coordinator_id: string;
   coordinator_name: string;
@@ -51,7 +70,9 @@ export interface ActivityProposal {
   activity_date: string; // YYYY-MM-DD
   start_time: string; // e.g. "09:00 AM" or "09:00"
   end_time: string; // e.g. "12:00 PM" or "12:00"
-  
+  start_minutes?: number; // Normalized minutes from midnight for overlap & range queries
+  end_minutes?: number; // Normalized minutes from midnight for overlap & range queries
+
   // Budget & Supplier Details from Event Request Form
   expected_budget?: string;
   budget_details?: string;
@@ -73,12 +94,14 @@ export interface ActivityProposal {
   status: ProposalStatus;
   is_completed?: boolean; // True if past event date or completed
   rejection_reason?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   created_at: string;
   updated_at: string;
 }
 
-// Classroom Timetable Schedule managed by Admin
-export interface ClassSchedule {
+// Classroom Timetable Schedule managed by Admin (Firestore collection: `class_schedules`)
+export interface ClassSchedule extends AuditFields {
   id: string;
   campus: string;
   room_id: string;
@@ -86,15 +109,18 @@ export interface ClassSchedule {
   course_code: string;
   course_title: string;
   lecturer_name: string;
-  day_of_week: "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
-  date?: string; // Optional specific date
+  day_of_week: DayOfWeek;
+  date?: string; // Optional specific date (YYYY-MM-DD)
   start_time: string; // e.g. "08:30"
   end_time: string; // e.g. "11:30"
+  start_minutes?: number;
+  end_minutes?: number;
   batch: string; // e.g. "Batch 24"
+  status?: ScheduleStatus;
 }
 
 // Legacy Booking interface for backwards compatibility
-export interface Booking {
+export interface Booking extends AuditFields {
   id: string;
   room_id: string;
   user_id: string;
@@ -104,8 +130,22 @@ export interface Booking {
   end_time: string;
   status: BookingStatus;
   rejection_reason?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   created_at: string;
   updated_at: string;
   room?: Room;
   profile?: Profile;
+}
+
+// Immutable Security & Operations Audit Log (Firestore collection: `audit_logs`)
+export interface AuditLog {
+  id: string;
+  collection: "profiles" | "rooms" | "activity_proposals" | "class_schedules";
+  document_id: string;
+  action: "create" | "update" | "approve" | "reject" | "cancel" | "delete";
+  actor_id: string;
+  actor_role: UserRole | "system";
+  details?: Record<string, unknown>;
+  created_at: string;
 }

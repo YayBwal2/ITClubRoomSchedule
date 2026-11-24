@@ -1,25 +1,79 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { CAMPUSES_DATA, UPCOMING_SCHEDULE_DATA } from "@/lib/constants";
-import { CalendarDays, Clock, MapPin, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  CAMPUSES_DATA,
+  UPCOMING_SCHEDULE_DATA,
+  UpcomingItem,
+} from "@/lib/constants";
+import {
+  getDayOfWeekFromDate,
+  parseTimeToMinutes,
+} from "@/lib/firebase/collections";
+import { getActivityProposals } from "@/actions/bookings";
+import { getCurrentProfile } from "@/actions/profiles";
+import { getRooms } from "@/actions/rooms";
+import { getClassSchedules } from "@/actions/schedules";
+import { ActivityProposal, ClassSchedule, Room } from "@/types/database";
+import { CalendarDays, Clock, MapPin, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 export default function CalendarGrid() {
   const [selectedCampus, setSelectedCampus] = useState<string>("U Wisara");
-  const [selectedDate, setSelectedDate] = useState<string>("2026-10-29");
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [currentRole, setCurrentRole] = useState<string>("coordinator");
+  const [liveRooms, setLiveRooms] = useState<Room[]>([]);
+  const [liveSchedules, setLiveSchedules] = useState<ClassSchedule[]>([]);
+  const [liveProposals, setLiveProposals] = useState<ActivityProposal[]>([]);
+  const [hasLiveConnection, setHasLiveConnection] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const saved = localStorage.getItem("cfss_current_role");
-    if (saved) {
-      setCurrentRole(saved);
-    }
+
+    Promise.all([
+      getCurrentProfile(),
+      getRooms(),
+      getClassSchedules(),
+      getActivityProposals(),
+    ]).then(([profileRes, roomsRes, schedulesRes, proposalsRes]) => {
+      if (cancelled) return;
+      if (profileRes.data) {
+        setCurrentRole(profileRes.data.role);
+        setHasLiveConnection(true);
+      } else if (saved) {
+        setCurrentRole(saved);
+      }
+      if (roomsRes.data) {
+        setLiveRooms(roomsRes.data);
+      }
+      if (schedulesRes.data) {
+        setLiveSchedules(schedulesRes.data);
+      }
+      if (proposalsRes.data) {
+        setLiveProposals(proposalsRes.data);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Active campus rooms
-  const currentCampusConfig = CAMPUSES_DATA.find((c) => c.name === selectedCampus) || CAMPUSES_DATA[0];
-  const rooms = currentCampusConfig.rooms;
+  // Active campus rooms (live Firestore rooms with fallback to constants)
+  const currentCampusConfig =
+    CAMPUSES_DATA.find((c) => c.name === selectedCampus) || CAMPUSES_DATA[0];
+  const rooms = useMemo(() => {
+    const campusRooms = liveRooms.filter((r) => r.campus === selectedCampus);
+    return campusRooms.length > 0 ? campusRooms : currentCampusConfig.rooms;
+  }, [liveRooms, selectedCampus, currentCampusConfig.rooms]);
+
+  const selectedDayOfWeek = useMemo(
+    () => getDayOfWeekFromDate(selectedDate),
+    [selectedDate]
+  );
 
   // Timeline hours across standard school day (09:00 AM - 06:00 PM)
   const timeSlots = [
@@ -31,17 +85,64 @@ export default function CalendarGrid() {
     { label: "04:30 - 06:00", start: 990, end: 1080 },
   ];
 
-  // Helper to get ALL sessions for a room on the active campus
-  const getSessionsForRoom = (roomName: string) => {
-    const normRoom = roomName.toLowerCase().replace(/\s+/g, "");
-    const normCampus = selectedCampus.toLowerCase().trim();
+  // Helper to get ALL sessions for a room on the active campus & date
+  const getSessionsForRoom = (room: Room): UpcomingItem[] => {
+    if (!hasLiveConnection) {
+      const normRoom = room.name.toLowerCase().replace(/\s+/g, "");
+      const normCampus = selectedCampus.toLowerCase().trim();
+      return UPCOMING_SCHEDULE_DATA.filter((item) => {
+        const matchCampus =
+          item.campus.toLowerCase().includes(normCampus) ||
+          normCampus.includes(item.campus.toLowerCase());
+        const matchRoom =
+          item.room.toLowerCase().replace(/\s+/g, "") === normRoom;
+        return matchCampus && matchRoom;
+      });
+    }
 
-    return UPCOMING_SCHEDULE_DATA.filter((item) => {
-      const matchCampus =
-        item.campus.toLowerCase().includes(normCampus) || normCampus.includes(item.campus.toLowerCase());
-      const matchRoom = item.room.toLowerCase().replace(/\s+/g, "") === normRoom;
-      return matchCampus && matchRoom;
-    });
+    const scheduleItems: UpcomingItem[] = liveSchedules
+      .filter((s) => {
+        if (s.status === "cancelled") return false;
+        const sameRoom = s.room_id === room.id || (s.campus === selectedCampus && s.room_name === room.name);
+        if (!sameRoom) return false;
+        return s.date ? s.date === selectedDate : s.day_of_week === selectedDayOfWeek;
+      })
+      .map((s) => ({
+        id: s.id,
+        time: `${s.start_time} - ${s.end_time}`,
+        startMinutes: s.start_minutes ?? parseTimeToMinutes(s.start_time),
+        endMinutes: s.end_minutes ?? parseTimeToMinutes(s.end_time),
+        category: s.course_title,
+        room: s.room_name,
+        campus: s.campus,
+        type: s.course_code.startsWith("DCBM")
+          ? "DCBM Class"
+          : s.course_code.startsWith("BM")
+          ? "BM Class"
+          : "DC Class",
+        lecturerOrOrganizer: s.lecturer_name,
+      }));
+
+    const approvedProposalItems: UpcomingItem[] = liveProposals
+      .filter(
+        (p) =>
+          p.status === "approved" &&
+          p.activity_date === selectedDate &&
+          (p.room_id === room.id || (p.campus === selectedCampus && p.room_name === room.name))
+      )
+      .map((p) => ({
+        id: p.id,
+        time: `${p.start_time} - ${p.end_time}`,
+        startMinutes: p.start_minutes ?? parseTimeToMinutes(p.start_time),
+        endMinutes: p.end_minutes ?? parseTimeToMinutes(p.end_time),
+        category: p.title,
+        room: p.room_name,
+        campus: p.campus,
+        type: "Club Activity",
+        lecturerOrOrganizer: p.club_name,
+      }));
+
+    return [...scheduleItems, ...approvedProposalItems];
   };
 
   return (
@@ -149,7 +250,7 @@ export default function CalendarGrid() {
               </tr>
             ) : (
               rooms.map((room) => {
-                const roomSessions = getSessionsForRoom(room.name);
+                const roomSessions = getSessionsForRoom(room);
 
                 return (
                   <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">

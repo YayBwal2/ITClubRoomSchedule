@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { signInAndCreateSession } from "@/lib/firebase/auth-client";
 import { UserRole } from "@/types/database";
 
 export default function LoginPage() {
@@ -11,25 +12,37 @@ export default function LoginPage() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const performLogin = (role: UserRole, targetRoute: string, userFullName: string) => {
-        localStorage.setItem("cfss_current_role", role);
-        localStorage.setItem("cfss_user_name", userFullName);
-        router.push(targetRoute);
+    const routeForRole = (role: UserRole) => {
+        if (role === "admin") return "/admin";
+        if (role === "sse") return "/schedule";
+        return "/bookings";
     };
 
-    const handleSubmit = (e: React.SyntheticEvent) => {
+    const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault();
-        const cleanUser = username.trim().toLowerCase();
+        setErrorMessage(null);
+        setIsSubmitting(true);
 
-        // Direct to respective portal based on user credentials
-        if (cleanUser.includes("admin")) {
-            performLogin("admin", "/admin", "School Operations Admin");
-        } else if (cleanUser.includes("sse")) {
-            performLogin("sse", "/schedule", "Student Services Executive");
-        } else {
-            // Coordinator default
-            performLogin("coordinator", "/bookings", cleanUser || "Club Coordinator");
+        try {
+            const profile = await signInAndCreateSession(username, password);
+            router.push(routeForRole(profile.role));
+        } catch (err: unknown) {
+            const message =
+                err instanceof Error
+                    ? err.message
+                    : "Invalid username/email or password.";
+            setErrorMessage(
+                message.includes("auth/invalid-credential") ||
+                    message.includes("auth/user-not-found") ||
+                    message.includes("auth/wrong-password")
+                    ? "Invalid email/username or password."
+                    : message
+            );
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -128,13 +141,21 @@ export default function LoginPage() {
                         </button>
                     </div>
 
+                    {/* Error Message */}
+                    {errorMessage && (
+                        <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-xs sm:text-sm font-bold text-[#DE0808] text-center">
+                            {errorMessage}
+                        </div>
+                    )}
+
                     {/* Submit Button */}
                     <div className="pt-2 flex justify-center">
                         <button
                             type="submit"
-                            className="w-3/4 max-w-[320px] h-12 sm:h-13 bg-white/70 hover:bg-white active:scale-[0.98] text-[#DE0808] font-bold text-xl sm:text-2xl rounded-2xl shadow-[0_4px_14px_rgba(0,0,0,0.08)] backdrop-blur-md border border-white/80 transition-all flex items-center justify-center cursor-pointer tracking-wide"
+                            disabled={isSubmitting}
+                            className="w-3/4 max-w-[320px] h-12 sm:h-13 bg-white/70 hover:bg-white active:scale-[0.98] disabled:opacity-60 text-[#DE0808] font-bold text-xl sm:text-2xl rounded-2xl shadow-[0_4px_14px_rgba(0,0,0,0.08)] backdrop-blur-md border border-white/80 transition-all flex items-center justify-center cursor-pointer tracking-wide"
                         >
-                            Login
+                            {isSubmitting ? "Signing in..." : "Login"}
                         </button>
                     </div>
                 </form>

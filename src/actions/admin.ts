@@ -1,31 +1,128 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { Booking, BookingStatus } from "@/types/database";
+import {
+  COLLECTIONS,
+  buildAuditUpdateFields,
+  parseTimeToMinutes,
+} from "@/lib/firebase/collections";
+import {
+  errorMessage,
+  mapProposalToBooking,
+  requireActor,
+} from "@/lib/firebase/action-helpers";
+import {
+  assertNoRoomOverlap,
+  writeAuditLogInTransaction,
+} from "@/lib/firebase/overlap";
+import { ActivityProposal, Booking } from "@/types/database";
 
-/**
- * Backend Server Actions for Admin Approvals & Status Updates
- */
-
-export async function getPendingBookings(): Promise<{ data: Booking[] | null; error: string | null }> {
+export async function getPendingProposals(): Promise<{
+  data: ActivityProposal[] | null;
+  error: string | null;
+}> {
   try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("bookings")
-      .select(`
-        *,
-        room:rooms(*),
-        profile:profiles(*)
-      `)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
+    const auth = await requireActor(
+      ["admin", "sse"],
+      "Forbidden: Only Admin or SSE can view the approval queue."
+    );
+    if (!auth.ok) return { data: null, error: auth.error };
 
-    if (error) return { data: null, error: error.message };
-    return { data: (data as unknown as Booking[]) || [], error: null };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to fetch pending bookings";
-    return { data: null, error: message };
+    const snap = await auth.db
+      .collection(COLLECTIONS.ACTIVITY_PROPOSALS)
+      .where("status", "==", "pending")
+      .orderBy("created_at", "desc")
+      .get();
+
+    return {
+      data: snap.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() }) as ActivityProposal
+      ),
+      error: null,
+    };
+  } catch (err) {
+    return {
+      data: null,
+      error: errorMessage(err, "Failed to fetch pending proposals"),
+    };
   }
+}
+
+export async function reviewActivityProposal(
+  proposalId: string,
+  status: "approved" | "rejected",
+  rejectionReason?: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const auth = await requireActor(
+      ["admin"],
+      "Forbidden: Only School Admins can approve or reject proposals."
+    );
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const { actor, db } = auth;
+    const proposalRef = db
+      .collection(COLLECTIONS.ACTIVITY_PROPOSALS)
+      .doc(proposalId);
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(proposalRef);
+      if (!snap.exists) throw new Error("Proposal not found.");
+
+      const proposal = snap.data() as ActivityProposal;
+      if (status === "approved") {
+        const startMinutes =
+          proposal.start_minutes ?? parseTimeToMinutes(proposal.start_time);
+        const endMinutes =
+          proposal.end_minutes ?? parseTimeToMinutes(proposal.end_time);
+
+        await assertNoRoomOverlap(tx, db, {
+          roomId: proposal.room_id,
+          activityDate: proposal.activity_date,
+          startMinutes,
+          endMinutes,
+          excludeProposalId: proposalId,
+        });
+      }
+
+      const reason =
+        status === "rejected" ? rejectionReason?.trim() || null : null;
+
+      tx.update(proposalRef, {
+        status,
+        rejection_reason: reason,
+        reviewed_by: actor.uid,
+        reviewed_at: new Date().toISOString(),
+        ...buildAuditUpdateFields(actor.uid),
+      });
+
+      writeAuditLogInTransaction(tx, db, {
+        collection: "activity_proposals",
+        document_id: proposalId,
+        action: status === "approved" ? "approve" : "reject",
+        actor_id: actor.uid,
+        actor_role: actor.role,
+        details: { status, rejection_reason: reason },
+      });
+    });
+
+    return { success: true, error: null };
+  } catch (err) {
+    return {
+      success: false,
+      error: errorMessage(err, "Failed to update proposal status"),
+    };
+  }
+}
+
+export async function getPendingBookings(): Promise<{
+  data: Booking[] | null;
+  error: string | null;
+}> {
+  const res = await getPendingProposals();
+  if (res.error || !res.data) {
+    return { data: null, error: res.error };
+  }
+  return { data: res.data.map(mapProposalToBooking), error: null };
 }
 
 export async function updateBookingStatus(
@@ -33,42 +130,5 @@ export async function updateBookingStatus(
   status: "approved" | "rejected",
   rejectionReason?: string
 ): Promise<{ success: boolean; error: string | null }> {
-  try {
-    const supabase = await createClient();
-
-    // Verify current user is admin
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return { success: false, error: "Unauthorized. Please log in." };
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "school_admin") {
-      return { success: false, error: "Forbidden: Only School Admins can update booking status." };
-    }
-
-    const { error } = await supabase
-      .from("bookings")
-      .update({
-        status: status as BookingStatus,
-        rejection_reason: status === "rejected" ? rejectionReason || null : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", bookingId);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, error: null };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update booking status";
-    return { success: false, error: message };
-  }
+  return reviewActivityProposal(bookingId, status, rejectionReason);
 }

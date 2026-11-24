@@ -1,13 +1,11 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   X,
   Calendar as CalendarIcon,
   Clock,
-  MapPin,
   Building2,
-  Users,
   CheckCircle2,
   AlertCircle,
   Plus,
@@ -16,12 +14,19 @@ import {
   Send,
 } from "lucide-react";
 import {
+  ALL_ROOMS,
   CAMPUSES_DATA,
   checkRoomConflict,
-  timeStringToMinutes,
-  minutesToDisplayTime,
 } from "@/lib/constants";
-import { ActivityProposal } from "@/types/database";
+import {
+  getDayOfWeekFromDate,
+  hasTimeOverlap,
+  parseTimeToMinutes,
+} from "@/lib/firebase/collections";
+import { createActivityProposal, getActivityProposals } from "@/actions/bookings";
+import { getRooms } from "@/actions/rooms";
+import { getClassSchedules } from "@/actions/schedules";
+import { ActivityProposal, ClassSchedule, Room } from "@/types/database";
 
 interface BookingFormModalProps {
   isOpen: boolean;
@@ -31,6 +36,10 @@ interface BookingFormModalProps {
 
 export default function BookingFormModal({ isOpen, onClose, onSubmitSuccess }: BookingFormModalProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [liveRooms, setLiveRooms] = useState<Room[]>(ALL_ROOMS);
+  const [liveProposals, setLiveProposals] = useState<ActivityProposal[]>([]);
+  const [liveSchedules, setLiveSchedules] = useState<ClassSchedule[]>([]);
 
   // Optional Section Toggles
   const [enableRoomBooking, setEnableRoomBooking] = useState(true);
@@ -66,14 +75,51 @@ export default function BookingFormModal({ isOpen, onClose, onSubmitSuccess }: B
     additional_requests: "",
   });
 
+  // Load live rooms, schedules & approved proposals from Firestore when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+
+    Promise.all([getRooms(), getClassSchedules(), getActivityProposals()]).then(
+      ([roomsRes, schedulesRes, proposalsRes]) => {
+        if (cancelled) return;
+        setSubmitError(null);
+        if (roomsRes.data && roomsRes.data.length > 0) {
+          setLiveRooms(roomsRes.data);
+        }
+        if (schedulesRes.data) {
+          setLiveSchedules(schedulesRes.data);
+        }
+        if (proposalsRes.data) {
+          setLiveProposals(proposalsRes.data);
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
   // Calculate time strings
   const formattedStartTime = `${formData.start_hour}:${formData.start_minute} ${formData.start_period}`;
   const formattedEndTime = `${formData.end_hour}:${formData.end_minute} ${formData.end_period}`;
 
-  const startMinutes = useMemo(() => timeStringToMinutes(formattedStartTime), [formattedStartTime]);
-  const endMinutes = useMemo(() => timeStringToMinutes(formattedEndTime), [formattedEndTime]);
+  const startMinutes = useMemo(() => parseTimeToMinutes(formattedStartTime), [formattedStartTime]);
+  const endMinutes = useMemo(() => parseTimeToMinutes(formattedEndTime), [formattedEndTime]);
 
-  // Real-time Room Collision Checking
+  const availableRooms = useMemo(() => {
+    const filtered = liveRooms.filter((r) => r.campus === formData.campus);
+    if (filtered.length > 0) return filtered;
+    return (CAMPUSES_DATA.find((c) => c.name === formData.campus) || CAMPUSES_DATA[0]).rooms;
+  }, [liveRooms, formData.campus]);
+
+  const selectedRoom = useMemo(
+    () => availableRooms.find((r) => r.name === formData.room_name) || availableRooms[0],
+    [availableRooms, formData.room_name]
+  );
+
+  // Real-time Room Collision Checking (against live Firestore data + fallback constants)
   const conflictResult = useMemo(() => {
     if (!enableRoomBooking || !formData.room_name) return { hasConflict: false };
 
@@ -84,19 +130,65 @@ export default function BookingFormModal({ isOpen, onClose, onSubmitSuccess }: B
       };
     }
 
-    const check = checkRoomConflict(formData.campus, formData.room_name, startMinutes, endMinutes);
-    if (check.hasConflict && check.conflictingSession) {
+    const roomId = selectedRoom?.id;
+    const isSameRoom = (itemRoomId: string, itemCampus: string, itemRoomName: string) =>
+      roomId ? itemRoomId === roomId : itemRoomName === formData.room_name && itemCampus === formData.campus;
+
+    const matchedProposal = liveProposals.find((p) => {
+      if (p.status !== "approved" || p.activity_date !== formData.activity_date) return false;
+      if (!isSameRoom(p.room_id, p.campus, p.room_name)) return false;
+      const pStart = p.start_minutes ?? parseTimeToMinutes(p.start_time);
+      const pEnd = p.end_minutes ?? parseTimeToMinutes(p.end_time);
+      return hasTimeOverlap(startMinutes, endMinutes, pStart, pEnd);
+    });
+
+    if (matchedProposal) {
       return {
         hasConflict: true,
-        message: `Collision: "${check.conflictingSession.category}" (${check.conflictingSession.type}) is already scheduled from ${check.conflictingSession.time} in ${formData.room_name}.`,
+        message: `Collision: "${matchedProposal.title}" (${matchedProposal.club_name}) is already approved from ${matchedProposal.start_time} - ${matchedProposal.end_time} in ${formData.room_name}.`,
       };
     }
 
-    return { hasConflict: false };
-  }, [formData.campus, formData.room_name, startMinutes, endMinutes, enableRoomBooking]);
+    const dayName = getDayOfWeekFromDate(formData.activity_date);
+    const matchedSchedule = liveSchedules.find((s) => {
+      if (s.status === "cancelled") return false;
+      if (!isSameRoom(s.room_id, s.campus, s.room_name)) return false;
+      const matchesDay = s.date ? s.date === formData.activity_date : dayName === s.day_of_week;
+      if (!matchesDay) return false;
+      const sStart = s.start_minutes ?? parseTimeToMinutes(s.start_time);
+      const sEnd = s.end_minutes ?? parseTimeToMinutes(s.end_time);
+      return hasTimeOverlap(startMinutes, endMinutes, sStart, sEnd);
+    });
 
-  const activeCampusObj = CAMPUSES_DATA.find((c) => c.name === formData.campus) || CAMPUSES_DATA[0];
-  const availableRooms = activeCampusObj.rooms;
+    if (matchedSchedule) {
+      return {
+        hasConflict: true,
+        message: `Collision: "${matchedSchedule.course_title}" (${matchedSchedule.batch}) is scheduled from ${matchedSchedule.start_time} - ${matchedSchedule.end_time} in ${formData.room_name}.`,
+      };
+    }
+
+    if (liveProposals.length === 0 && liveSchedules.length === 0) {
+      const check = checkRoomConflict(formData.campus, formData.room_name, startMinutes, endMinutes);
+      if (check.hasConflict && check.conflictingSession) {
+        return {
+          hasConflict: true,
+          message: `Collision: "${check.conflictingSession.category}" (${check.conflictingSession.type}) is already scheduled from ${check.conflictingSession.time} in ${formData.room_name}.`,
+        };
+      }
+    }
+
+    return { hasConflict: false };
+  }, [
+    enableRoomBooking,
+    formData.campus,
+    formData.room_name,
+    formData.activity_date,
+    startMinutes,
+    endMinutes,
+    selectedRoom,
+    liveProposals,
+    liveSchedules,
+  ]);
 
   // Supplier list handlers
   const handleAddSupplier = () => {
@@ -119,50 +211,57 @@ export default function BookingFormModal({ isOpen, onClose, onSubmitSuccess }: B
     setFormData({ ...formData, suppliers: updated });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
 
     if (enableRoomBooking && conflictResult.hasConflict) {
-      alert("Please resolve the room scheduling conflict before submitting.");
+      setSubmitError("Please resolve the room scheduling conflict before submitting.");
       return;
     }
 
+    const targetRoomId = selectedRoom?.id || `room-${formData.room_name.toLowerCase().replace(/\s+/g, "-")}`;
     setSubmitting(true);
 
-    const newProposal: ActivityProposal = {
-      id: `prop-${Date.now()}`,
-      coordinator_id: "user-coord-1",
-      coordinator_name: formData.organizer_name || "Club Coordinator",
-      club_name: formData.club_name,
-      title: formData.title,
-      description: formData.description,
-      expected_attendees: Number(formData.expected_attendees),
-      campus: formData.campus,
-      room_id: `room-${formData.room_name.toLowerCase().replace(/\s+/g, "-")}`,
-      room_name: formData.room_name,
-      activity_date: formData.activity_date,
-      start_time: formattedStartTime,
-      end_time: formattedEndTime,
-      expected_budget: enableBudget ? formData.expected_budget : undefined,
-      budget_details: enableBudget ? formData.budget_details : undefined,
-      suppliers: enableBudget ? formData.suppliers.filter((s) => s.name || s.phone) : undefined,
-      organizer_name: formData.organizer_name,
-      organizer_role: formData.organizer_role,
-      organizer_email: formData.organizer_email,
-      organizer_phone: formData.organizer_phone,
-      additional_requests: enableComments ? formData.additional_requests : undefined,
-      status: "pending",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const res = await createActivityProposal({
+        coordinator_name: formData.organizer_name || "Club Coordinator",
+        club_name: formData.club_name,
+        title: formData.title,
+        description: formData.description,
+        expected_attendees: Number(formData.expected_attendees),
+        campus: formData.campus,
+        room_id: targetRoomId,
+        room_name: selectedRoom?.name || formData.room_name,
+        activity_date: formData.activity_date,
+        start_time: formattedStartTime,
+        end_time: formattedEndTime,
+        start_minutes: startMinutes,
+        end_minutes: endMinutes,
+        expected_budget: enableBudget ? formData.expected_budget : undefined,
+        budget_details: enableBudget ? formData.budget_details : undefined,
+        suppliers: enableBudget ? formData.suppliers.filter((s) => s.name || s.phone) : undefined,
+        organizer_name: formData.organizer_name,
+        organizer_role: formData.organizer_role,
+        organizer_email: formData.organizer_email,
+        organizer_phone: formData.organizer_phone,
+        additional_requests: enableComments ? formData.additional_requests : undefined,
+      });
 
-    setTimeout(() => {
-      setSubmitting(false);
+      if (!res.success || !res.data) {
+        setSubmitError(res.error || "Failed to submit proposal.");
+        return;
+      }
+
       if (onSubmitSuccess) {
-        onSubmitSuccess(newProposal);
+        onSubmitSuccess(res.data);
       }
       onClose();
-    }, 600);
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to submit proposal.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -641,6 +740,14 @@ export default function BookingFormModal({ isOpen, onClose, onSubmitSuccess }: B
               />
             )}
           </div>
+
+          {/* Submit Error Alert */}
+          {submitError && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
 
           {/* Modal Actions */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">

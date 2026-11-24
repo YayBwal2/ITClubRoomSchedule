@@ -5,6 +5,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, Calendar, BookOpen, ShieldCheck, User, LogOut } from "lucide-react";
+import { getCurrentProfile } from "@/actions/profiles";
+import { signOutAndClearSession } from "@/lib/firebase/auth-client";
 import { UserRole } from "@/types/database";
 
 export interface NavItem {
@@ -20,23 +22,36 @@ export default function Navbar() {
   const [currentRole, setCurrentRole] = useState<UserRole>("coordinator");
   const [avatarPreview, setAvatarPreview] = useState<string>("");
 
-  const handleLogout = () => {
-    localStorage.removeItem("cfss_current_role");
-    localStorage.removeItem("cfss_user_avatar");
-    localStorage.removeItem("cfss_user_name");
+  const handleLogout = async () => {
+    await signOutAndClearSession();
     router.push("/login");
   };
 
-  // Sync role and avatar from localStorage
+  // Sync role from authenticated Firestore profile and avatar from localStorage
   useEffect(() => {
+    if (pathname === "/login") return;
+
+    let cancelled = false;
     const saved = localStorage.getItem("cfss_current_role") as UserRole;
-    if (saved === "coordinator" || saved === "admin" || saved === "sse") {
-      setCurrentRole(saved);
-    }
     const savedAvatar = localStorage.getItem("cfss_user_avatar");
-    if (savedAvatar) {
-      setAvatarPreview(savedAvatar);
-    }
+
+    getCurrentProfile().then((res) => {
+      if (cancelled) return;
+      if (savedAvatar) {
+        setAvatarPreview(savedAvatar);
+      }
+      if (res.data) {
+        setCurrentRole(res.data.role);
+        localStorage.setItem("cfss_current_role", res.data.role);
+        localStorage.setItem("cfss_user_name", res.data.full_name);
+      } else if (saved === "coordinator" || saved === "admin" || saved === "sse") {
+        setCurrentRole(saved);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   // Hide navbar on login page

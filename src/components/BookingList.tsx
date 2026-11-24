@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getActivityProposals } from "@/actions/bookings";
+import { getCurrentProfile } from "@/actions/profiles";
 import { ActivityProposal, ProposalStatus } from "@/types/database";
 import {
   Calendar,
@@ -100,17 +102,51 @@ const INITIAL_PROPOSALS: ActivityProposal[] = [
 
 export default function BookingList() {
   const router = useRouter();
-  const [proposals, setProposals] = useState<ActivityProposal[]>(INITIAL_PROPOSALS);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [proposals, setProposals] = useState<ActivityProposal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("openModal") === "true" || params.get("new") === "true";
+  });
   const [activeFilter, setActiveFilter] = useState<"all" | ProposalStatus>("all");
   const [inspectProposal, setInspectProposal] = useState<ActivityProposal | null>(null);
 
-  // Restrict SSE from accessing bookings: redirect to /schedule immediately
+  // Restrict SSE from accessing bookings and load proposals from Firestore
   useEffect(() => {
+    let cancelled = false;
     const role = localStorage.getItem("cfss_current_role");
     if (role === "sse") {
       router.replace("/schedule");
+      return;
     }
+
+    Promise.all([getCurrentProfile(), getActivityProposals()]).then(
+      ([profileRes, proposalsRes]) => {
+        if (cancelled) return;
+
+        if (profileRes.data?.role === "sse") {
+          router.replace("/schedule");
+          return;
+        }
+
+        if (proposalsRes.data) {
+          setProposals(proposalsRes.data);
+          setLoadError(null);
+        } else {
+          setProposals(INITIAL_PROPOSALS);
+          if (proposalsRes.error && !proposalsRes.error.includes("Unauthorized")) {
+            setLoadError(proposalsRes.error);
+          }
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // Listen for openBookingModal custom event (e.g. from Navbar + New Booking button)
@@ -122,7 +158,6 @@ export default function BookingList() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("openModal") === "true" || params.get("new") === "true") {
-        setIsModalOpen(true);
         window.history.replaceState({}, "", "/bookings");
       }
     }
@@ -212,13 +247,24 @@ export default function BookingList() {
         })}
       </div>
 
+      {/* Load Error Alert */}
+      {loadError && (
+        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold">
+          {loadError}
+        </div>
+      )}
+
       {/* Bookings Grid */}
-      {filteredProposals.length === 0 ? (
+      {loading ? (
+        <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs text-xs font-bold text-slate-400">
+          Loading reservations from Firestore...
+        </div>
+      ) : filteredProposals.length === 0 ? (
         <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs">
           <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h3 className="font-bold text-slate-900 text-base">No booking requests found</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-            You don't have any {activeFilter !== "all" ? activeFilter : ""} proposals yet. Click below to submit a new request.
+            You don&apos;t have any {activeFilter !== "all" ? activeFilter : ""} proposals yet. Click below to submit a new request.
           </p>
           <button
             onClick={() => setIsModalOpen(true)}
@@ -362,7 +408,7 @@ export default function BookingList() {
                 <div className="pt-2 space-y-1">
                   <span className="text-slate-500 font-bold block">Comments & Requests</span>
                   <p className="bg-slate-50 p-2.5 rounded-xl text-slate-700 italic">
-                    "{inspectProposal.additional_requests}"
+                    &ldquo;{inspectProposal.additional_requests}&rdquo;
                   </p>
                 </div>
               )}
