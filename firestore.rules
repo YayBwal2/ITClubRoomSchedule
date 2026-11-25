@@ -2,168 +2,111 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // =========================================================================
-    // Helper Functions for Role-Based Access Control (3 Roles: coordinator, sse, admin)
-    // =========================================================================
-
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
 
-    function profileExists() {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/profiles/$(request.auth.uid));
+    function profilePath() {
+      return /databases/$(database)/documents/profiles/$(request.auth.uid);
     }
 
-    function currentUserProfile() {
-      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+    function isActive() {
+      return isSignedIn() &&
+        exists(profilePath()) &&
+        get(profilePath()).data.get('is_active', true) == true;
     }
 
     function hasRole(role) {
-      return profileExists() && currentUserProfile().role == role;
+      return isActive() && get(profilePath()).data.role == role;
     }
 
-    function isAdmin() {
-      return hasRole('admin');
+    function isAdmin() { return hasRole('admin'); }
+    function isStaff() { return hasRole('admin') || hasRole('sse'); }
+
+    function keepsImmutableAudit() {
+      return request.resource.data.created_at == resource.data.created_at &&
+        request.resource.data.created_by == resource.data.created_by &&
+        request.resource.data.updated_by == request.auth.uid;
     }
 
-    function isSSE() {
-      return hasRole('sse');
+    function validTimeWindow() {
+      let d = request.resource.data;
+      return d.get('start_minutes', -1) is int &&
+        d.get('end_minutes', -1) is int &&
+        d.start_minutes >= 0 &&
+        d.end_minutes <= 1440 &&
+        d.end_minutes > d.start_minutes;
     }
 
-    function isCoordinator() {
-      return hasRole('coordinator');
+    function isOwnPendingProposal() {
+      return hasRole('coordinator') &&
+        resource.data.coordinator_id == request.auth.uid &&
+        resource.data.status == 'pending';
     }
 
-    function isActiveUser() {
-      return profileExists() &&
-        (!('is_active' in currentUserProfile()) || currentUserProfile().is_active == true);
-    }
-
-    function validTimeWindow(data) {
-      return ('start_minutes' in data) &&
-        ('end_minutes' in data) &&
-        data.start_minutes is int &&
-        data.end_minutes is int &&
-        data.start_minutes >= 0 &&
-        data.end_minutes <= 1440 &&
-        data.end_minutes > data.start_minutes;
-    }
-
-    // =========================================================================
-    // 1. PROFILES COLLECTION
-    // - Users can view their own profile; Admins and SSE can view all profiles.
-    // - Self-registration can only assign role = 'coordinator'.
-    // - Users can update their own profile details without elevating role.
-    // - Only Admins can change roles or delete profiles.
-    // =========================================================================
+    // 1. Profiles: self read/update (no role escalation), admin full access, SSE read-only
     match /profiles/{userId} {
-      allow read: if isOwner(userId) || isAdmin() || isSSE();
-
+      allow read: if isOwner(userId) || isStaff();
       allow create: if isAdmin() || (
         isOwner(userId) &&
         request.resource.data.id == userId &&
         request.resource.data.role == 'coordinator' &&
         request.resource.data.created_by == request.auth.uid
       );
-
       allow update: if isAdmin() || (
         isOwner(userId) &&
         request.resource.data.id == resource.data.id &&
         request.resource.data.role == resource.data.role &&
-        request.resource.data.created_at == resource.data.created_at &&
-        request.resource.data.created_by == resource.data.created_by &&
-        request.resource.data.updated_by == request.auth.uid
+        keepsImmutableAudit()
       );
-
       allow delete: if isAdmin();
     }
 
-    // =========================================================================
-    // 2. ROOMS COLLECTION
-    // - All authenticated roles (coordinator, sse, admin) can read rooms.
-    // - Only Admins can create, update, or delete rooms.
-    // =========================================================================
+    // 2. Rooms & Class Schedules: active users read, admin writes
     match /rooms/{roomId} {
-      allow read: if isAuthenticated() && isActiveUser();
-      allow create, update, delete: if isAdmin();
+      allow read: if isActive();
+      allow write: if isAdmin();
     }
 
-    // =========================================================================
-    // 3. ACTIVITY PROPOSALS COLLECTION
-    // - Read: Admins & SSE can read all; Coordinators can read their own + any approved proposal.
-    // - Create: Coordinators (for themselves, status must be 'pending') & Admins.
-    // - Update: Admins can approve/reject/edit; Coordinators can edit own pending proposals
-    //           without changing status to approved/rejected. SSE is strictly view-only.
-    // - Note: Overlap prevention is enforced atomically via Server Actions (Admin SDK Transaction)
-    //         before writes are committed.
-    // =========================================================================
-    match /activity_proposals/{proposalId} {
-      allow read: if isAdmin() || isSSE() || (
-        isAuthenticated() && isActiveUser() && (
-          resource.data.coordinator_id == request.auth.uid ||
-          resource.data.status == 'approved'
-        )
-      );
+    match /class_schedules/{scheduleId} {
+      allow read: if isActive();
+      allow create, update: if isAdmin() && validTimeWindow();
+      allow delete: if isAdmin();
+    }
 
-      allow create: if (isAdmin() && validTimeWindow(request.resource.data)) || (
-        isCoordinator() &&
-        isActiveUser() &&
+    // 3. Activity Proposals: SSE view-only, coordinators manage own pending, admin approves/rejects
+    match /activity_proposals/{proposalId} {
+      allow read: if isStaff() || (
+        isActive() &&
+        (resource.data.coordinator_id == request.auth.uid || resource.data.status == 'approved')
+      );
+      allow create: if validTimeWindow() && (isAdmin() || (
+        hasRole('coordinator') &&
         request.resource.data.coordinator_id == request.auth.uid &&
         request.resource.data.status == 'pending' &&
         request.resource.data.created_by == request.auth.uid &&
-        request.resource.data.updated_by == request.auth.uid &&
-        validTimeWindow(request.resource.data)
-      );
-
+        request.resource.data.updated_by == request.auth.uid
+      ));
       allow update: if isAdmin() || (
-        isCoordinator() &&
-        isActiveUser() &&
-        resource.data.coordinator_id == request.auth.uid &&
-        resource.data.status == 'pending' &&
+        isOwnPendingProposal() &&
         request.resource.data.coordinator_id == resource.data.coordinator_id &&
         request.resource.data.status == 'pending' &&
-        request.resource.data.created_at == resource.data.created_at &&
-        request.resource.data.created_by == resource.data.created_by &&
-        request.resource.data.updated_by == request.auth.uid &&
-        validTimeWindow(request.resource.data)
+        keepsImmutableAudit() &&
+        validTimeWindow()
       );
-
-      allow delete: if isAdmin() || (
-        isCoordinator() &&
-        isActiveUser() &&
-        resource.data.coordinator_id == request.auth.uid &&
-        resource.data.status == 'pending'
-      );
+      allow delete: if isAdmin() || isOwnPendingProposal();
     }
 
-    // =========================================================================
-    // 4. CLASS SCHEDULES COLLECTION
-    // - All authenticated roles (coordinator, sse, admin) can read class schedules.
-    // - Only Admins can create, update, or delete class schedules.
-    // =========================================================================
-    match /class_schedules/{scheduleId} {
-      allow read: if isAuthenticated() && isActiveUser();
-      allow create, update: if isAdmin() && validTimeWindow(request.resource.data);
-      allow delete: if isAdmin();
-    }
-
-    // =========================================================================
-    // 5. AUDIT LOGS COLLECTION
-    // - Admins & SSE can read audit logs for oversight.
-    // - Client writes are blocked; logs are written exclusively by Firebase Admin SDK.
-    // =========================================================================
+    // 4. Audit Logs: admin & SSE read-only; writes reserved for Admin SDK
     match /audit_logs/{logId} {
-      allow read: if isAdmin() || isSSE();
+      allow read: if isStaff();
       allow write: if false;
     }
 
-    // Deny all other paths by default
     match /{document=**} {
       allow read, write: if false;
     }
