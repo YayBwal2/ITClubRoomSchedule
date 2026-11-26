@@ -2,7 +2,7 @@
 export type UserRole = "coordinator" | "sse" | "admin";
 
 // Proposal Lifecycle Statuses
-export type ProposalStatus = "pending" | "approved" | "rejected";
+export type ProposalStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 // Legacy Booking status for backwards compatibility
 export type BookingStatus = "pending" | "approved" | "rejected" | "cancelled";
@@ -96,8 +96,31 @@ export interface ActivityProposal extends AuditFields {
   rejection_reason?: string | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RoomBusySlot {
+  id: string;
+  source: "class_schedule" | "approved_proposal" | "pending_proposal";
+  title: string;
+  subtitle: string;
+  start_time: string;
+  end_time: string;
+  start_minutes: number;
+  end_minutes: number;
+}
+
+export interface RoomAvailabilityResult {
+  room: Room;
+  activity_date: string;
+  is_available: boolean;
+  conflict_reason: string | null;
+  busy_slots: RoomBusySlot[];
+  pending_slots: RoomBusySlot[];
+  alternative_rooms: Room[];
 }
 
 // Classroom Timetable Schedule managed by Admin (Firestore collection: `class_schedules`)

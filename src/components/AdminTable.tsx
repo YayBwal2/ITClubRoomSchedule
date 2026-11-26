@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { reviewActivityProposal } from "@/actions/admin";
 import { getActivityProposals } from "@/actions/bookings";
 import { getCurrentProfile } from "@/actions/profiles";
+import { notifyScheduleUpdated } from "@/lib/schedule-sync";
 import { ActivityProposal, ProposalStatus } from "@/types/database";
 import {
   Check,
@@ -183,6 +184,7 @@ export default function AdminTable() {
       return;
     }
 
+    notifyScheduleUpdated();
     setProposals((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: "approved" as ProposalStatus, rejection_reason: null } : p))
     );
@@ -199,6 +201,7 @@ export default function AdminTable() {
       return;
     }
 
+    notifyScheduleUpdated();
     setProposals((prev) =>
       prev.map((p) =>
         p.id === rejectItem.id

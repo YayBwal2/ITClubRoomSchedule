@@ -48,6 +48,12 @@ service cloud.firestore {
         resource.data.status == 'pending';
     }
 
+    function isOwnCancellableProposal() {
+      return hasRole('coordinator') &&
+        resource.data.coordinator_id == request.auth.uid &&
+        resource.data.status in ['pending', 'approved'];
+    }
+
     // 1. Profiles: self read/update (no role escalation), admin full access, SSE read-only
     match /profiles/{userId} {
       allow read: if isOwner(userId) || isStaff();
@@ -97,6 +103,11 @@ service cloud.firestore {
         request.resource.data.status == 'pending' &&
         keepsImmutableAudit() &&
         validTimeWindow()
+      ) || (
+        isOwnCancellableProposal() &&
+        request.resource.data.coordinator_id == resource.data.coordinator_id &&
+        request.resource.data.status == 'cancelled' &&
+        keepsImmutableAudit()
       );
       allow delete: if isAdmin() || isOwnPendingProposal();
     }

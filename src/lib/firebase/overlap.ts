@@ -57,7 +57,7 @@ function assertNoClassScheduleOverlap(
       hasTimeOverlap(input.startMinutes, input.endMinutes, existingStart, existingEnd)
     ) {
       throw new Error(
-        `This room is already reserved for class "${existing.course_title}" (${existing.start_time} - ${existing.end_time}).`
+        `Room "${existing.room_name}" has a scheduled class "${existing.course_title}" (${existing.batch}) from ${existing.start_time} - ${existing.end_time}. Please choose another time slot or room.`
       );
     }
   }
@@ -122,7 +122,9 @@ export async function assertNoRoomOverlap(
         existingEnd > existingStart &&
         hasTimeOverlap(input.startMinutes, input.endMinutes, existingStart, existingEnd)
       ) {
-        throw new Error("This room is already reserved for this time slot.");
+        throw new Error(
+          `Room "${room.name}" is already booked for "${existing.title}" (${existing.club_name}) from ${existing.start_time} - ${existing.end_time} on ${existing.activity_date}. Please pick another time slot or room.`
+        );
       }
     }
   }
